@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -77,6 +78,10 @@ async def create_test_topic():
         print("Failed to find a valid category to post in")
         return None
 
+    # Create a unique title with timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    title = f"Test Topic for Moderation ({timestamp})"
+
     headers = {
         'Api-Key': DISCOURSE_API_KEY,
         'Api-Username': DISCOURSE_API_USERNAME,
@@ -84,7 +89,7 @@ async def create_test_topic():
     }
 
     topic_data = {
-        'title': 'Test Topic for Moderation',
+        'title': title,
         'raw': 'This is a test topic for testing moderation functionality.',
         'category': category_id
     }
@@ -101,16 +106,16 @@ async def create_test_topic():
                 result = response.json()
                 print("\nTopic created successfully:")
                 print(f"Topic ID: {result['topic_id']}")
-                return result['topic_id'], result['id']  # Return both topic_id and post_id
+                return result['topic_id']
             else:
                 print(f"\nFailed to create topic. Status code: {response.status_code}")
                 print(f"Response: {response.text}")
-                return None, None
+                return None
 
     except Exception as e:
         print(f"Error creating topic: {str(e)}")
         print("Please check your DISCOURSE_BASE_URL and ensure it's correct (should include http:// or https://)")
-        return None, None
+        return None
 
 async def create_inappropriate_post(topic_id):
     if not validate_env_vars():
@@ -149,38 +154,9 @@ async def create_inappropriate_post(topic_id):
         print(f"Error creating inappropriate post: {str(e)}")
         return None
 
-async def delete_topic(topic_id):
-    if not validate_env_vars():
-        return False
-
-    headers = {
-        'Api-Key': DISCOURSE_API_KEY,
-        'Api-Username': DISCOURSE_API_USERNAME,
-        'Content-Type': 'application/json'
-    }
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(
-                f"{DISCOURSE_BASE_URL}/t/{topic_id}.json",
-                headers=headers
-            )
-            
-            if response.status_code == 200:
-                print(f"\nTopic {topic_id} deleted successfully")
-                return True
-            else:
-                print(f"\nFailed to delete topic. Status code: {response.status_code}")
-                print(f"Response: {response.text}")
-                return False
-
-    except Exception as e:
-        print(f"Error deleting topic: {str(e)}")
-        return False
-
 async def test_inappropriate_post():
     # First create a test topic
-    topic_id, post_id = await create_test_topic()
+    topic_id = await create_test_topic()
     
     if not topic_id:
         print("Cannot proceed with test - failed to create topic")
@@ -193,18 +169,15 @@ async def test_inappropriate_post():
         if inappropriate_post_id:
             print("\nTest completed successfully")
             print(f"Topic ID: {topic_id}")
-            print(f"Original Post ID: {post_id}")
             print(f"Inappropriate Post ID: {inappropriate_post_id}")
+            print("\nWaiting for moderation to process...")
+            # Wait a bit for moderation to process
+            await asyncio.sleep(5)
         else:
             print("\nTest failed - could not create inappropriate post")
 
     except Exception as e:
         print(f"Error during test: {str(e)}")
-    
-    finally:
-        # Clean up by deleting the test topic
-        print("\nCleaning up test topic...")
-        await delete_topic(topic_id)
 
 if __name__ == "__main__":
     print("Testing inappropriate post moderation...")

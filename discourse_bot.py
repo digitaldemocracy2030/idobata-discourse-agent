@@ -26,6 +26,9 @@ DISCOURSE_BASE_URL = os.getenv("DISCOURSE_BASE_URL")
 APP_API_KEY = os.getenv("APP_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Constants
+DELETION_MESSAGE = "このコメントはガイドラインを違反しているため削除されました"
+
 if not all([DISCOURSE_API_KEY, DISCOURSE_BASE_URL, APP_API_KEY, GEMINI_API_KEY]):
     raise ValueError("Missing required environment variables")
 
@@ -111,8 +114,8 @@ class DiscourseClient:
             response.raise_for_status()
             return response.json()
 
-    async def delete_post(self, post_id: int) -> Dict[Any, Any]:
-        """Delete a post"""
+    async def delete_post(self, post_id: int) -> bool:
+        """Delete a post and return success status"""
         print(f"\nAttempting to delete post {post_id}")
         try:
             async with httpx.AsyncClient() as client:
@@ -121,12 +124,12 @@ class DiscourseClient:
                     headers=self.headers
                 )
                 response.raise_for_status()
-                print(f"Successfully deleted post {post_id}")
-                return response.json()
+                print(f"Successfully deleted post {post_id} (Status: {response.status_code})")
+                return True
         except Exception as e:
             print(f"\nError deleting post {post_id}:")
             traceback.print_exc()
-            raise
+            return False
 
     async def create_reply(self, topic_id: int, content: str) -> Dict[Any, Any]:
         """Create a reply in a topic"""
@@ -173,16 +176,16 @@ async def handle_moderation(post: Dict[str, Any]):
         if not is_appropriate:
             print("\nPost deemed inappropriate, taking action...")
             # Delete the inappropriate post
-            await discourse_client.delete_post(post['id'])
-            
-            # Post a message indicating the deletion
-            await discourse_client.create_reply(
-                topic_id=post['topic_id'],
-                content="このコメントはガイドラインを違反しているため削除されました"
-            )
-            
-            print(f"\nSuccessfully moderated post {post['id']}")
-            print(f"Reason: {explanation}")
+            if await discourse_client.delete_post(post['id']):
+                # Only post a reply if deletion was successful
+                await discourse_client.create_reply(
+                    topic_id=post['topic_id'],
+                    content=DELETION_MESSAGE
+                )
+                print(f"\nSuccessfully moderated post {post['id']}")
+                print(f"Reason: {explanation}")
+            else:
+                print(f"\nFailed to delete inappropriate post {post['id']}")
 
     except Exception as e:
         print("\nError in moderation handler:")
@@ -226,25 +229,34 @@ async def webhook_handler(request: Request):
         print("\nParsed webhook payload:")
         print(json.dumps(body, indent=2))
         
-        # Start moderation in the background if it's a post event
+        # Check if it's a post event
         if 'post' in body:
-            # Create a task for moderation but don't await it
-            asyncio.create_task(handle_moderation(body['post']))
+            post = body['post']
+            
+            # Skip if post is already deleted
+            if post.get('deleted_at') is not None:
+                print("\nIgnoring already deleted post")
+            # Skip if this is our own deletion notification message
+            elif post.get('raw') == DELETION_MESSAGE:
+                print("\nIgnoring our own deletion notification message")
+            else:
+                # Create a task for moderation but don't await it
+                asyncio.create_task(handle_moderation(post))
         else:
             print("\nNot a post event, ignoring")
         
-        # Always return 200 OK immediately
-        return Response(status_code=200)
+        # Send 200 OK status without any response body
+        return Response(status_code=200, content=None)
 
     except json.JSONDecodeError as e:
         print("\nJSON decode error in webhook handler:")
         print(f"Error: {str(e)}")
         traceback.print_exc()
-        return Response(status_code=200)
+        return Response(status_code=200, content=None)
     except Exception as e:
         print("\nUnexpected error in webhook handler:")
         traceback.print_exc()
-        return Response(status_code=200)
+        return Response(status_code=200, content=None)
 
 if __name__ == "__main__":
     import uvicorn
