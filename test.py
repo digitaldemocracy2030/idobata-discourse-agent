@@ -1,117 +1,211 @@
+import httpx
+import asyncio
+import json
 import os
-import sys
-from datetime import datetime
-import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
-# 環境変数の読み込み
 load_dotenv()
 
-# API設定
+# Get environment variables with validation
 DISCOURSE_API_KEY = os.getenv('DISCOURSE_API_KEY')
+DISCOURSE_API_USERNAME = os.getenv('DISCOURSE_API_USERNAME')
 DISCOURSE_BASE_URL = os.getenv('DISCOURSE_BASE_URL')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-USERNAME = 'takahiroanno'
 
-# 必要な環境変数のチェック
-if not all([DISCOURSE_API_KEY, DISCOURSE_BASE_URL, OPENAI_API_KEY]):
-    print('エラー: 必要な環境変数が設定されていません')
-    sys.exit(1)
+# Validate environment variables
+def validate_env_vars():
+    missing_vars = []
+    if not DISCOURSE_API_KEY:
+        missing_vars.append('DISCOURSE_API_KEY')
+    if not DISCOURSE_API_USERNAME:
+        missing_vars.append('DISCOURSE_API_USERNAME')
+    if not DISCOURSE_BASE_URL:
+        missing_vars.append('DISCOURSE_BASE_URL')
+    
+    if missing_vars:
+        print("Error: Missing required environment variables:")
+        for var in missing_vars:
+            print(f"- {var}")
+        print("\nPlease set these variables in your .env file")
+        return False
+    return True
 
-def generate_recipe():
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    
-    # レシピの生成
-    # タイトル用のリクエスト
-    title_response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
-                "role": "system",
-                "content": "日本の家庭料理の名前のみを1行で返してください。余計な説明は不要です。"
-            },
-            {
-                "role": "user",
-                "content": "今日の献立として、料理名を1つ提案してください。"
-            }
-        ]
-    )
-    
-    title = title_response.choices[0].message.content.strip()
-    
-    # レシピ用のリクエスト
-    recipe_response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
-                "role": "system",
-                "content": "指定された料理のレシピを、材料（分量付き）と手順を箇条書きで説明してください。余計な挨拶や説明は不要です。"
-            },
-            {
-                "role": "user",
-                "content": f"{title}のレシピを教えてください。"
-            }
-        ]
-    )
-    
-    recipe = recipe_response.choices[0].message.content
-    
-    return title, recipe
+async def get_categories():
+    if not validate_env_vars():
+        return None
 
-def post_to_discourse():
-    # レシピの生成
-    title, recipe = generate_recipe()
-    
-    # デバッグ出力
-    print(f"生成されたタイトル: {title}")
-    print(f"生成されたレシピ: {recipe}")
-    
-    # 投稿内容
-    post_data = {
-        'title': title,
-        'raw': f'# {title}\n\n{recipe}',  # タイトルを本文の先頭にも表示
-        'category': 4,
-        'topic_id': None,  # 新しいトピックを作成
-        'archetype': 'regular'  # 通常の投稿として作成
-    }
-    
-    # APIエンドポイント
-    url = f'{DISCOURSE_BASE_URL}/posts.json'
-    
-    # ヘッダー設定
     headers = {
         'Api-Key': DISCOURSE_API_KEY,
-        'Api-Username': USERNAME,
+        'Api-Username': DISCOURSE_API_USERNAME,
         'Content-Type': 'application/json'
     }
-    
-    try:
-        # 現在時刻を取得してタイトルに追加
-        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-        unique_title = f'{title}_{current_time}'
-        
-        # 新しいトピックを作成
-        topic_data = {
-            'title': unique_title,
-            'raw': f'# {title}\n\n{recipe}',
-            'category': 4,
-            'embed_url': None,
-            'typing_duration_msecs': 6000,
-            'composer_open_duration_msecs': 7000
-        }
-        
-        # トピック作成リクエスト
-        response = requests.post(f'{DISCOURSE_BASE_URL}/posts.json', json=topic_data, headers=headers)
-        response.raise_for_status()
-        
-        result = response.json()
-        print(f'投稿が成功しました: {result}')
-        
-    except requests.exceptions.RequestException as e:
-        print(f'エラーが発生しました: {e}')
-        if hasattr(e, 'response') and e.response is not None:
-            print(f'エラーの詳細: {e.response.text}')
 
-if __name__ == '__main__':
-    post_to_discourse()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{DISCOURSE_BASE_URL}/categories.json",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                categories = result.get('category_list', {}).get('categories', [])
+                print("\nAvailable categories:")
+                for category in categories:
+                    print(f"ID: {category['id']}, Name: {category['name']}")
+                
+                # Return the first available category ID that's not restricted
+                for category in categories:
+                    if not category.get('read_restricted', True):
+                        return category['id']
+                return None
+            else:
+                print(f"\nFailed to fetch categories. Status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                return None
+
+    except Exception as e:
+        print(f"Error fetching categories: {str(e)}")
+        return None
+
+async def create_test_topic():
+    if not validate_env_vars():
+        return None
+
+    # Get a valid category ID first
+    category_id = await get_categories()
+    if not category_id:
+        print("Failed to find a valid category to post in")
+        return None
+
+    headers = {
+        'Api-Key': DISCOURSE_API_KEY,
+        'Api-Username': DISCOURSE_API_USERNAME,
+        'Content-Type': 'application/json'
+    }
+
+    topic_data = {
+        'title': 'Test Topic for Moderation',
+        'raw': 'This is a test topic for testing moderation functionality.',
+        'category': category_id
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{DISCOURSE_BASE_URL}/posts.json",
+                headers=headers,
+                json=topic_data
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print("\nTopic created successfully:")
+                print(f"Topic ID: {result['topic_id']}")
+                return result['topic_id'], result['id']  # Return both topic_id and post_id
+            else:
+                print(f"\nFailed to create topic. Status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                return None, None
+
+    except Exception as e:
+        print(f"Error creating topic: {str(e)}")
+        print("Please check your DISCOURSE_BASE_URL and ensure it's correct (should include http:// or https://)")
+        return None, None
+
+async def create_inappropriate_post(topic_id):
+    if not validate_env_vars():
+        return None
+
+    headers = {
+        'Api-Key': DISCOURSE_API_KEY,
+        'Api-Username': DISCOURSE_API_USERNAME,
+        'Content-Type': 'application/json'
+    }
+
+    post_data = {
+        'topic_id': topic_id,
+        'raw': 'This is a very inappropriate test post containing offensive content, hate speech, and vulgar language! @#$%^&*'
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{DISCOURSE_BASE_URL}/posts.json",
+                headers=headers,
+                json=post_data
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print("\nInappropriate post created successfully:")
+                print(f"Post ID: {result['id']}")
+                return result['id']
+            else:
+                print(f"\nFailed to create inappropriate post. Status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                return None
+
+    except Exception as e:
+        print(f"Error creating inappropriate post: {str(e)}")
+        return None
+
+async def delete_topic(topic_id):
+    if not validate_env_vars():
+        return False
+
+    headers = {
+        'Api-Key': DISCOURSE_API_KEY,
+        'Api-Username': DISCOURSE_API_USERNAME,
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{DISCOURSE_BASE_URL}/t/{topic_id}.json",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                print(f"\nTopic {topic_id} deleted successfully")
+                return True
+            else:
+                print(f"\nFailed to delete topic. Status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                return False
+
+    except Exception as e:
+        print(f"Error deleting topic: {str(e)}")
+        return False
+
+async def test_inappropriate_post():
+    # First create a test topic
+    topic_id, post_id = await create_test_topic()
+    
+    if not topic_id:
+        print("Cannot proceed with test - failed to create topic")
+        return
+
+    try:
+        # Create an inappropriate post in the topic
+        inappropriate_post_id = await create_inappropriate_post(topic_id)
+        
+        if inappropriate_post_id:
+            print("\nTest completed successfully")
+            print(f"Topic ID: {topic_id}")
+            print(f"Original Post ID: {post_id}")
+            print(f"Inappropriate Post ID: {inappropriate_post_id}")
+        else:
+            print("\nTest failed - could not create inappropriate post")
+
+    except Exception as e:
+        print(f"Error during test: {str(e)}")
+    
+    finally:
+        # Clean up by deleting the test topic
+        print("\nCleaning up test topic...")
+        await delete_topic(topic_id)
+
+if __name__ == "__main__":
+    print("Testing inappropriate post moderation...")
+    asyncio.run(test_inappropriate_post())
