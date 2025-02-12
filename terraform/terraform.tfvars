@@ -1,2 +1,2 @@
-project_id = "docomo-gemini"
+project_id = ""
 region     = "asia-northeast1"

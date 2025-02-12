@@ -19,3 +19,6 @@ build/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Other
+terraform.tfvars
