@@ -2,6 +2,8 @@
 resource "google_compute_network" "vpc" {
   name                    = var.vpc_name
   auto_create_subnetworks = false
+  
+  depends_on = [google_project_service.required_apis]
 }
 
 # サブネットの作成
@@ -68,7 +70,8 @@ resource "google_cloud_run_service" "service" {
 
   depends_on = [
     google_vpc_access_connector.connector,
-    google_artifact_registry_repository.repo
+    google_artifact_registry_repository.repo,
+    google_project_service.required_apis
   ]
 }
 
@@ -80,10 +83,9 @@ resource "google_cloud_run_service_iam_member" "public" {
   member   = "allUsers"
 }
 
-# 必要なAPIの有効化
+# 必要なAPIの有効化を最初に行うように移動
 resource "google_project_service" "required_apis" {
   for_each = toset([
-    "cloudrun.googleapis.com",
     "vpcaccess.googleapis.com",
     "artifactregistry.googleapis.com"
   ])
