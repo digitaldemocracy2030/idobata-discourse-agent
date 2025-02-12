@@ -49,12 +49,14 @@ jobs:
         env:
           GOOGLE_ACCESS_TOKEN: ${{ env.GOOGLE_ACCESS_TOKEN }}
         run: |
-          echo $GOOGLE_ACCESS_TOKEN | docker login -u oauth2accesstoken --password-stdin gcr.io
+          echo $GOOGLE_ACCESS_TOKEN | docker login -u oauth2accesstoken --password-stdin ${REGION}-docker.pkg.dev
 
       - name: Build and Push Container
         run: |-
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker build -t ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} .
+          docker push ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
+          docker tag ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
+          docker push ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
 
       - name: Deploy to Cloud Run
         env:
@@ -73,7 +75,7 @@ jobs:
                 \"template\": {
                   \"spec\": {
                     \"containers\": [{
-                      \"image\": \"gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${GITHUB_SHA}\",
+                      \"image\": \"${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${GITHUB_SHA}\",
                       \"env\": [
                         {\"name\": \"DISCOURSE_API_KEY\", \"value\": \"${{ secrets.DISCOURSE_API_KEY }}\"},
                         {\"name\": \"DISCOURSE_API_USERNAME\", \"value\": \"${{ secrets.DISCOURSE_API_USERNAME }}\"},
