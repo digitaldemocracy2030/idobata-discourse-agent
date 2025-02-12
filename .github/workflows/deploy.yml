@@ -38,13 +38,17 @@ jobs:
         run: |
           curl -H "Authorization: Bearer ${OIDC_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"audience\": \"${WORKLOAD_IDENTITY_PROVIDER}\",\"grantType\": \"urn:ietf:params:oauth:grant-type:token-exchange\",\"requestedTokenType\": \"urn:ietf:params:oauth:token-type:access_token\",\"scope\": \"https://www.googleapis.com/auth/cloud-platform\",\"subjectTokenType\": \"urn:ietf:params:oauth:token-type:jwt\",\"subjectToken\": \"${OIDC_TOKEN}\"}" \
+            -d "{
+              \"audience\": \"${WORKLOAD_IDENTITY_PROVIDER}\",
+              \"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\",
+              \"requested_token_type\": \"urn:ietf:params:oauth:token-type:access_token\",
+              \"scope\": \"https://www.googleapis.com/auth/cloud-platform\",
+              \"subject_token_type\": \"urn:ietf:params:oauth:token-type:id_token\",
+              \"subject_token\": \"${OIDC_TOKEN}\"
+            }" \
             "https://sts.googleapis.com/v1/token" > token.json
-          echo ${OIDC_TOKEN}
           ACCESS_TOKEN=$(jq -r .access_token token.json)
           echo "GOOGLE_ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
-          echo ${ACCESS_TOKEN}
-          cat token.json
           rm token.json
 
       - name: Configure Docker authentication
