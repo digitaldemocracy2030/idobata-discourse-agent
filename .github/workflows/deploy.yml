@@ -1,0 +1,87 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-northeast1
+  SERVICE_NAME: discourse-bot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+
+      - name: Get OIDC token
+        id: get-oidc-token
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://iam.googleapis.com/');
+            core.setOutput('token', token);
+
+      - name: Authenticate to Google Cloud
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WIF_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          OIDC_TOKEN: ${{ steps.get-oidc-token.outputs.token }}
+        run: |
+          curl -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"audience\": \"${WORKLOAD_IDENTITY_PROVIDER}\",\"grantType\": \"urn:ietf:params:oauth:grant-type:token-exchange\",\"requestedTokenType\": \"urn:ietf:params:oauth:token-type:access_token\",\"scope\": \"https://www.googleapis.com/auth/cloud-platform\",\"subjectTokenType\": \"urn:ietf:params:oauth:token-type:jwt\",\"subjectToken\": \"${OIDC_TOKEN}\"}" \
+            "https://sts.googleapis.com/v1/token" > token.json
+
+          ACCESS_TOKEN=$(jq -r .access_token token.json)
+          echo "GOOGLE_ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
+          rm token.json
+
+      - name: Configure Docker authentication
+        env:
+          GOOGLE_ACCESS_TOKEN: ${{ env.GOOGLE_ACCESS_TOKEN }}
+        run: |
+          echo $GOOGLE_ACCESS_TOKEN | docker login -u oauth2accesstoken --password-stdin gcr.io
+
+      - name: Build and Push Container
+        run: |-
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        env:
+          GOOGLE_ACCESS_TOKEN: ${{ env.GOOGLE_ACCESS_TOKEN }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${GOOGLE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"apiVersion\": \"serving.knative.dev/v1\",
+              \"kind\": \"Service\",
+              \"metadata\": {
+                \"name\": \"${SERVICE_NAME}\"
+              },
+              \"spec\": {
+                \"template\": {
+                  \"spec\": {
+                    \"containers\": [{
+                      \"image\": \"gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${GITHUB_SHA}\",
+                      \"env\": [
+                        {\"name\": \"DISCOURSE_API_KEY\", \"value\": \"${{ secrets.DISCOURSE_API_KEY }}\"},
+                        {\"name\": \"DISCOURSE_API_USERNAME\", \"value\": \"${{ secrets.DISCOURSE_API_USERNAME }}\"},
+                        {\"name\": \"DISCOURSE_URL\", \"value\": \"${{ secrets.DISCOURSE_URL }}\"}
+                      ]
+                    }]
+                  }
+                }
+              }
+            }" \
+            "https://run.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/services"

@@ -6,6 +6,9 @@ This guide explains how to deploy the Discourse Bot to Google Cloud Platform usi
 
 ```
 .
+├── .github/
+│   └── workflows/          # GitHub Actions workflows
+│       └── deploy.yml      # Deployment workflow
 ├── Dockerfile              # Container configuration
 ├── discourse_bot.py        # Main application code
 ├── requirements.txt        # Python dependencies
@@ -24,7 +27,75 @@ This guide explains how to deploy the Discourse Bot to Google Cloud Platform usi
 3. [Docker](https://docs.docker.com/get-docker/)
 4. A Google Cloud Project with billing enabled
 
-## Deployment Steps
+## Deployment Methods
+
+You can deploy this application either manually or using GitHub Actions for CI/CD.
+
+### Method 1: GitHub Actions (Recommended)
+
+#### 1. Set up Workload Identity Federation
+
+1. Create a Workload Identity Pool:
+```bash
+gcloud iam workload-identity-pools create "github-actions-pool" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+```
+
+2. Create a Workload Identity Provider:
+```bash
+gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --workload-identity-pool="github-actions-pool" \
+  --display-name="GitHub provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+```
+
+3. Create a Service Account:
+```bash
+gcloud iam service-accounts create "github-actions-service-account" \
+  --project="${PROJECT_ID}" \
+  --display-name="GitHub Actions Service Account"
+```
+
+4. Grant necessary permissions:
+```bash
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-actions-service-account@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-actions-service-account@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-actions-service-account@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
+```
+
+5. Allow the GitHub repository to impersonate the service account:
+```bash
+gcloud iam service-accounts add-iam-policy-binding "github-actions-service-account@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --project="${PROJECT_ID}" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${GITHUB_REPO}"
+```
+
+#### 2. Configure GitHub Secrets
+
+Add the following secrets to your GitHub repository:
+
+- `GCP_PROJECT_ID`: Your Google Cloud project ID
+- `WIF_PROVIDER`: Workload Identity Provider resource name
+- `WIF_SERVICE_ACCOUNT`: Service account email
+- `DISCOURSE_API_KEY`: Your Discourse API key
+- `DISCOURSE_API_USERNAME`: Your Discourse username
+- `DISCOURSE_URL`: Your Discourse instance URL
+
+### Method 2: Manual Deployment
 
 ### 1. Authentication
 

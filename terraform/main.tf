@@ -58,7 +58,7 @@ resource "google_cloud_run_service" "service" {
         "autoscaling.knative.dev/minScale"      = var.min_instances
         "autoscaling.knative.dev/maxScale"      = var.max_instances
         "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.connector.id
-        "run.googleapis.com/vpc-access-egress"    = "all-traffic"
+        "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
       }
     }
   }
