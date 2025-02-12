@@ -1,59 +1,125 @@
-# Discourse Bot API
+# Discourse Bot Deployment Guide
 
-A FastAPI-based bot for interacting with Discourse forums. This API provides endpoints for creating topics and listing categories.
+This guide explains how to deploy the Discourse Bot to Google Cloud Platform using Terraform and Cloud Run.
 
-## Setup
+## Project Structure
 
-1. Clone the repository
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
+```
+.
+├── Dockerfile              # Container configuration
+├── discourse_bot.py        # Main application code
+├── requirements.txt        # Python dependencies
+└── terraform/             # Infrastructure as Code
+    ├── main.tf            # Main Terraform configuration
+    ├── variables.tf       # Variable definitions
+    ├── outputs.tf         # Output definitions
+    ├── provider.tf        # Provider configuration
+    └── terraform.tfvars   # (Create from terraform.tfvars.example)
 ```
 
-3. Configure environment variables by copying `.env.example` and updating with your values:
+## Prerequisites
+
+1. [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+2. [Terraform](https://www.terraform.io/downloads.html)
+3. [Docker](https://docs.docker.com/get-docker/)
+4. A Google Cloud Project with billing enabled
+
+## Deployment Steps
+
+### 1. Authentication
+
 ```bash
-cp .env.example .env
+# Login to Google Cloud
+gcloud auth login
+
+# Configure Docker authentication for Artifact Registry
+gcloud auth configure-docker asia-northeast1-docker.pkg.dev
 ```
 
-Required environment variables:
+### 2. Set Environment Variables
+
+Copy the example Terraform variables file and update it with your GCP project details:
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Edit `terraform.tfvars` with your project information:
+
+```hcl
+project_id = "your-project-id"
+region     = "asia-northeast1"  # Default region, change if needed
+```
+
+### 3. Store Secrets in Secret Manager
+
+Before deploying, you need to store your secrets in Google Cloud Secret Manager. You can do this using the Google Cloud Console or gcloud CLI:
+
+```bash
+# Store each secret (repeat for each environment variable)
+echo -n "your-secret-value" | gcloud secrets create discourse-api-key --data-file=-
+echo -n "your-secret-value" | gcloud secrets create discourse-base-url --data-file=-
+echo -n "your-secret-value" | gcloud secrets create discourse-api-username --data-file=-
+echo -n "your-secret-value" | gcloud secrets create app-api-key --data-file=-
+echo -n "your-secret-value" | gcloud secrets create gemini-api-key --data-file=-
+```
+
+### 4. Build and Push Docker Image
+
+From the root directory:
+
+```bash
+# Build the Docker image
+docker build -t asia-northeast1-docker.pkg.dev/[PROJECT_ID]/discourse-bot-repo/discourse-bot:latest .
+
+# Push the image to Artifact Registry
+docker push asia-northeast1-docker.pkg.dev/[PROJECT_ID]/discourse-bot-repo/discourse-bot:latest
+```
+
+### 5. Deploy with Terraform
+
+From the terraform directory:
+
+```bash
+# Initialize Terraform
+terraform init
+
+# Plan the deployment
+terraform plan
+
+# Apply the configuration
+terraform apply
+```
+
+After successful deployment, Terraform will output the service URL where your bot is accessible.
+
+## Environment Variables
+
+The following environment variables are required and should be stored in Secret Manager:
+
 - `DISCOURSE_API_KEY`: Your Discourse API key
-- `DISCOURSE_BASE_URL`: Your Discourse instance URL (e.g., https://community.yourdomain.com)
-- `APP_API_KEY`: API key for authenticating with this bot API
+- `DISCOURSE_BASE_URL`: Your Discourse instance URL
+- `DISCOURSE_API_USERNAME`: Your Discourse username
+- `APP_API_KEY`: Your application API key
+- `GEMINI_API_KEY`: Your Google Gemini API key
 
-## Running the Server
+## Infrastructure Components
 
-Start the server with:
+The deployment creates the following resources:
+
+- Artifact Registry Repository for Docker images
+- Cloud Run service for the bot
+- Secret Manager secrets for environment variables
+- Necessary IAM permissions and API enablement
+
+## Cleanup
+
+To remove all created resources:
+
 ```bash
-uvicorn discourse_bot:app --reload
+cd terraform
+terraform destroy
 ```
 
-The API will be available at `http://localhost:8000`
-
-## API Documentation
-
-### Authentication
-
-All endpoints require an API key passed in the `X-API-Key` header.
-
-### Endpoints
-
-#### GET /categories
-Lists all available Discourse categories.
-
-**Response**: JSON object containing all categories in your Discourse instance.
-
-#### POST /topics
-Creates a new topic in Discourse.
-
-**Parameters**:
-- `title`: Topic title
-- `content`: Topic content/body
-- `category_id`: ID of the category to post in
-
-**Response**: JSON object containing the created topic details.
-
-### Interactive Documentation
-
-FastAPI provides interactive API documentation at:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+Note: This will remove all resources created by Terraform, including the deployed service and secrets.

@@ -1,0 +1,16 @@
+# GCPプロジェクトの設定
+project_id = "project-id"
+region     = "asia-northeast1"
+
+# サービスの設定
+service_name    = "discourse-bot"
+container_port  = 8000
+min_instances   = 0
+max_instances   = 3
+
+# VPCの設定
+vpc_name            = "cloud-run-vpc"
+subnet_name         = "cloud-run-subnet"
+subnet_ip_range     = "10.0.0.0/24"
+vpc_connector_name  = "cloud-run-connector"
+vpc_connector_range = "10.8.0.0/28"
