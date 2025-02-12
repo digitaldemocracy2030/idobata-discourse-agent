@@ -43,6 +43,7 @@ jobs:
 
           ACCESS_TOKEN=$(jq -r .access_token token.json)
           echo "GOOGLE_ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
+          echo ${ACCESS_TOKEN}
           rm token.json
 
       - name: Configure Docker authentication
