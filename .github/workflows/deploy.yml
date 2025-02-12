@@ -47,6 +47,7 @@ jobs:
               \"subject_token\": \"${OIDC_TOKEN}\"
             }" \
             "https://sts.googleapis.com/v1/token" > token.json
+          cat token.json
           ACCESS_TOKEN=$(jq -r .access_token token.json)
           echo "GOOGLE_ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
           rm token.json
