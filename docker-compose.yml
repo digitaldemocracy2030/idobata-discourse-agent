@@ -7,6 +7,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      - ${HOME}/.config/gcloud:/root/.config/gcloud
     env_file:
       - .env
     command: uvicorn discourse_bot:app --host 0.0.0.0 --port 8000 --reload 

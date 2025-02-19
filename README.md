@@ -199,12 +199,24 @@ Note: This will remove all resources created by Terraform, including the deploye
 
 ### 環境のセットアップ
 
-1. `.env`ファイルを作成:
+1. GCP認証の設定:
+```bash
+# GCPにログイン
+gcloud auth login
+
+# アプリケーションのデフォルト認証情報を設定
+gcloud auth application-default login
+
+# Artifact Registry用のDockerの認証を設定
+gcloud auth configure-docker asia-northeast1-docker.pkg.dev
+```
+
+2. `.env`ファイルを作成:
 ```bash
 cp .env.example .env
 ```
 
-2. `.env`ファイルを編集して必要な環境変数を設定
+3. `.env`ファイルを編集して必要な環境変数を設定
 
 ### Docker Composeでの実行
 
