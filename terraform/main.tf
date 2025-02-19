@@ -2,7 +2,6 @@
 resource "google_compute_network" "vpc" {
   name                    = var.vpc_name
   auto_create_subnetworks = false
-  
   depends_on = [google_project_service.required_apis]
 }
 
@@ -89,7 +88,7 @@ resource "google_project_service" "required_apis" {
     "vpcaccess.googleapis.com",
     "artifactregistry.googleapis.com"
   ])
-  
+
   project = var.project_id
   service = each.key
 
