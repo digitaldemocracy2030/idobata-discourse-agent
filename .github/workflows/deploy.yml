@@ -22,75 +22,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4.1.1
 
-      - name: Get OIDC token
-        id: get-oidc-token
-        uses: actions/github-script@v7
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
         with:
-          script: |
-            const token = await core.getIDToken('https://iam.googleapis.com/');
-            core.setOutput('token', token);
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - name: Authenticate to Google Cloud
-        env:
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WIF_PROVIDER }}
-          SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-          OIDC_TOKEN: ${{ steps.get-oidc-token.outputs.token }}
-        run: |
-          curl -H "Authorization: Bearer ${OIDC_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"audience\": \"${WORKLOAD_IDENTITY_PROVIDER}\",
-              \"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\",
-              \"requested_token_type\": \"urn:ietf:params:oauth:token-type:access_token\",
-              \"scope\": \"https://www.googleapis.com/auth/cloud-platform\",
-              \"subject_token_type\": \"urn:ietf:params:oauth:token-type:id_token\",
-              \"subject_token\": \"${OIDC_TOKEN}\"
-            }" \
-            "https://sts.googleapis.com/v1/token" > token.json
-          cat token.json
-          ACCESS_TOKEN=$(jq -r .access_token token.json)
-          echo "GOOGLE_ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
-          rm token.json
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker authentication
-        env:
-          GOOGLE_ACCESS_TOKEN: ${{ env.GOOGLE_ACCESS_TOKEN }}
-        run: |
-          echo $GOOGLE_ACCESS_TOKEN | docker login -u oauth2accesstoken --password-stdin ${REGION}-docker.pkg.dev
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build and Push Container
         run: |-
-          docker build -t ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} .
-          docker push ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
-          docker tag ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
-          docker push ${REGION}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:latest
 
       - name: Deploy to Cloud Run
-        env:
-          GOOGLE_ACCESS_TOKEN: ${{ env.GOOGLE_ACCESS_TOKEN }}
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${GOOGLE_ACCESS_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"apiVersion\": \"serving.knative.dev/v1\",
-              \"kind\": \"Service\",
-              \"metadata\": {
-                \"name\": \"${SERVICE_NAME}\"
-              },
-              \"spec\": {
-                \"template\": {
-                  \"spec\": {
-                    \"containers\": [{
-                      \"image\": \"${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${GITHUB_SHA}\",
-                      \"env\": [
-                        {\"name\": \"DISCOURSE_API_KEY\", \"value\": \"${{ secrets.DISCOURSE_API_KEY }}\"},
-                        {\"name\": \"DISCOURSE_API_USERNAME\", \"value\": \"${{ secrets.DISCOURSE_API_USERNAME }}\"},
-                        {\"name\": \"DISCOURSE_URL\", \"value\": \"${{ secrets.DISCOURSE_URL }}\"}
-                      ]
-                    }]
-                  }
-                }
-              }
-            }" \
-            "https://run.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/services"
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
+          env_vars: |
+            DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }}
+            DISCOURSE_API_USERNAME=${{ secrets.DISCOURSE_API_USERNAME }}
+            DISCOURSE_URL=${{ secrets.DISCOURSE_URL }}
