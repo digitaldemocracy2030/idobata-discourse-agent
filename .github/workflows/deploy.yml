@@ -39,12 +39,6 @@ jobs:
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
           gcloud auth configure-docker
 
-      - name: Retrieve and Decode OIDC Token
-        run: |
-          # OIDC トークンを取得する
-          TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
-          echo "$TOKEN" | cut -d. -f2 | base64 --decode | jq .
-
       - name: Build and Push Container
         run: |-
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
