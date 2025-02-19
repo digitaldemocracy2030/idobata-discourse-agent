@@ -41,7 +41,12 @@ jobs:
 
       - name: Build and Push Container
         run: |-
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker build \
+            --build-arg DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }} \
+            --build-arg DISCOURSE_BASE_URL=${{ secrets.DISCOURSE_BASE_URL }} \
+            --build-arg APP_API_KEY=${{ secrets.APP_API_KEY }} \
+            --build-arg GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:latest
@@ -54,5 +59,6 @@ jobs:
           image: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
           env_vars: |
             DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }}
-            DISCOURSE_API_USERNAME=${{ secrets.DISCOURSE_API_USERNAME }}
-            DISCOURSE_URL=${{ secrets.DISCOURSE_URL }}
+            DISCOURSE_BASE_URL=${{ secrets.DISCOURSE_BASE_URL }}
+            APP_API_KEY=${{ secrets.APP_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
