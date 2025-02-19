@@ -194,3 +194,36 @@ terraform destroy
 ```
 
 Note: This will remove all resources created by Terraform, including the deployed service and secrets.
+
+## ローカル開発
+
+### 環境のセットアップ
+
+1. `.env`ファイルを作成:
+```bash
+cp .env.example .env
+```
+
+2. `.env`ファイルを編集して必要な環境変数を設定
+
+### Docker Composeでの実行
+
+開発サーバーの起動:
+```bash
+docker-compose up
+```
+
+バックグラウンドで実行する場合:
+```bash
+docker-compose up -d
+```
+
+コンテナの停止:
+```bash
+docker-compose down
+```
+
+変更を反映させてリビルド:
+```bash
+docker-compose up --build
+```

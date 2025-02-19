@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  discourse-bot:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    command: uvicorn discourse_bot:app --host 0.0.0.0 --port 8000 --reload 

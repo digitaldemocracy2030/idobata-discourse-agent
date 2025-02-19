@@ -12,7 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY discourse_bot.py .
-COPY .env .
 
 # Expose port 8000
 EXPOSE 8000
