@@ -81,6 +81,65 @@ async def check_content_appropriateness(content: str) -> tuple[bool, str]:
         traceback.print_exc()
         return False, f"Error analyzing content: {str(e)}"
 
+async def check_topic_similarity(new_content: str, existing_topics: list[Dict[str, Any]]) -> tuple[bool, str, Optional[int]]:
+    """
+    Check if the new content is similar to existing topics
+    Returns: (is_duplicate, explanation, similar_topic_id)
+    """
+    if not existing_topics:
+        return False, "No existing topics to compare", None
+
+    topics_text = "\n".join([
+        f"Topic {i+1}: {topic.get('title', '')} - {topic.get('excerpt', '')}"
+        for i, topic in enumerate(existing_topics)
+    ])
+
+    prompt = f"""
+    Please analyze if the following new content is similar to or duplicates any of the existing topics.
+    
+    New content:
+    {new_content}
+    
+    Existing topics:
+    {topics_text}
+    
+    Respond with:
+    - 'DUPLICATE' if the content is very similar to an existing topic (specify which Topic number)
+    - 'UNIQUE' if the content is sufficiently different
+    
+    Also provide a brief explanation of your decision.
+    """
+
+    try:
+        print("\nChecking topic similarity with Gemini API:")
+        response = model.generate_content(prompt)
+        response_text = response.text.strip().lower()
+        
+        is_duplicate = response_text.startswith('duplicate')
+        words = response_text.split()
+        
+        # Try to extract topic number if it's a duplicate
+        similar_topic_id = None
+        if is_duplicate:
+            for i, word in enumerate(words):
+                if word == "topic" and i + 1 < len(words):
+                    try:
+                        topic_num = int(words[i + 1]) - 1  # Convert to 0-based index
+                        if 0 <= topic_num < len(existing_topics):
+                            similar_topic_id = existing_topics[topic_num].get('id')
+                            break
+                    except ValueError:
+                        continue
+
+        explanation = ' '.join(words[1:])  # Remove DUPLICATE/UNIQUE and get explanation
+        print(f"Gemini Response: {response_text}")
+        return is_duplicate, explanation, similar_topic_id
+
+    except Exception as e:
+        print("\nError in similarity analysis:")
+        traceback.print_exc()
+        return False, f"Error analyzing similarity: {str(e)}", None
+
 class DiscourseClient:
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url.rstrip('/')
@@ -152,6 +211,24 @@ class DiscourseClient:
             traceback.print_exc()
             raise
 
+    async def get_recent_topics(self, limit: int = 20) -> list[Dict[str, Any]]:
+        """Get recent topics from Discourse"""
+        print(f"\nFetching {limit} recent topics")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/latest.json",
+                    headers=self.headers,
+                    params={'page': 0}
+                )
+                response.raise_for_status()
+                topics = response.json().get('topic_list', {}).get('topics', [])
+                return topics[:limit]
+        except Exception as e:
+            print("\nError fetching recent topics:")
+            traceback.print_exc()
+            return []
+
 # Initialize Discourse client
 discourse_client = DiscourseClient(DISCOURSE_BASE_URL, DISCOURSE_API_KEY)
 
@@ -186,6 +263,27 @@ async def handle_moderation(post: Dict[str, Any]):
                 print(f"Reason: {explanation}")
             else:
                 print(f"\nFailed to delete inappropriate post {post['id']}")
+            return  # Exit early if content is inappropriate
+
+        # If content is appropriate, check for topic similarity
+        print("\nChecking for similar topics...")
+        recent_topics = await discourse_client.get_recent_topics(20)
+        is_duplicate, similarity_explanation, similar_topic_id = await check_topic_similarity(post_content, recent_topics)
+        
+        if is_duplicate and similar_topic_id:
+            print("\nSimilar topic detected, notifying...")
+            duplicate_message = f"""
+類似のディスカッションを見つけました。
+こちらのトピックもご参照ください: {DISCOURSE_BASE_URL}/t/{similar_topic_id}
+
+類似点: {similarity_explanation}
+"""
+            await discourse_client.create_reply(
+                topic_id=post['topic_id'],
+                content=duplicate_message
+            )
+            print(f"\nNotified about similar topic {similar_topic_id}")
+            print(f"Similarity explanation: {similarity_explanation}")
 
     except Exception as e:
         print("\nError in moderation handler:")
