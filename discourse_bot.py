@@ -176,6 +176,9 @@ async def handle_moderation(post: Dict[str, Any]):
         if not is_appropriate:
             print("\nPost deemed inappropriate, taking action...")
             # Delete the inappropriate post
+            # not delete for now
+            print(f"\nmoderated post {post}")
+            """
             if await discourse_client.delete_post(post['id']):
                 # Only post a reply if deletion was successful
                 await discourse_client.create_reply(
@@ -186,6 +189,7 @@ async def handle_moderation(post: Dict[str, Any]):
                 print(f"Reason: {explanation}")
             else:
                 print(f"\nFailed to delete inappropriate post {post['id']}")
+            """
 
     except Exception as e:
         print("\nError in moderation handler:")
