@@ -89,7 +89,7 @@ resource "google_project_service" "required_apis" {
     "artifactregistry.googleapis.com",
     "aiplatform.googleapis.com",      # Vertex AI API
     "compute.googleapis.com",         # Compute Engine API (Vector Search依存)
-    "storage.googleapis.com"          # Cloud Storage API (Vector Search依存)
+    "storage.googleapis.com",         # Cloud Storage API (Vector Search依存)
   ])
 
   project = var.project_id
@@ -118,7 +118,7 @@ resource "google_vertex_ai_index" "vector_search_index" {
   metadata {
     contents_delta_uri = "gs://${google_storage_bucket.vector_search_bucket.name}/index-contents"
     config {
-      dimensions = 768  # テキスト埋め込みの次元数 (textembedding-gecko@latest の場合)
+      dimensions = var.embedding_dimension  # テキスト埋め込みの次元数
       approximate_neighbors_count = 50
       shard_size = "SHARD_SIZE_SMALL"
       distance_measure_type = "DOT_PRODUCT_DISTANCE"
@@ -151,7 +151,6 @@ resource "google_vertex_ai_index_endpoint" "vector_search_endpoint" {
 }
 
 # Vector Search Index Endpointへのデプロイ
-
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_index" {
   index_endpoint = google_vertex_ai_index_endpoint.vector_search_endpoint.id
   deployed_index_id = "deployed_index_${replace(var.vector_search_index_name, "-", "_")}"
@@ -171,7 +170,6 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_index" {
     google_vertex_ai_index_endpoint.vector_search_endpoint
   ]
 }
-
 
 # Cloud Run サービスアカウントにVertex AI関連の権限を付与
 resource "google_project_iam_member" "vertex_ai_user" {

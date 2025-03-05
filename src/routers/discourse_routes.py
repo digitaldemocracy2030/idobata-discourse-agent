@@ -6,6 +6,9 @@ from src.config import settings
 from src.models.schemas import TopicCreate, WebhookPayload
 from src.services.topic_service import TopicService
 from src.services.moderation import ModerationService
+from src.clients.discourse_client import DiscourseClient
+from src.services.vector_search import VectorSearchService
+from src.clients.slack_client import SlackClient
 
 router = APIRouter()
 
@@ -23,14 +26,11 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
 
 async def get_services():
     """サービスのインスタンスを取得する"""
-    from src.clients.discourse_client import DiscourseClient
-    from src.services.vector_search import VectorSearchService
-    
     discourse_client = DiscourseClient(settings.DISCOURSE_BASE_URL, settings.DISCOURSE_API_KEY)
     moderation_service = ModerationService(discourse_client)
     vector_search_service = VectorSearchService()
-    topic_service = TopicService(discourse_client, moderation_service, vector_search_service)
-    
+    slack_client = SlackClient()
+    topic_service = TopicService(discourse_client, moderation_service, vector_search_service, slack_client)
     return topic_service, moderation_service
 
 @router.get("/categories", response_model=List[Dict[str, Any]])
@@ -59,11 +59,25 @@ async def webhook_handler(
     services: tuple[TopicService, ModerationService] = Depends(get_services)
 ):
     """Discourseからのwebhookを処理するエンドポイント"""
-    _, moderation_service = services
+    topic_service, moderation_service = services
     
     # Webhookのシグネチャを検証（必要に応じて実装）
+    # 投稿の重複チェック
+    if 'title' in payload.post and 'raw' in payload.post:
+        similarity_result = await topic_service.check_topic_duplication(
+            title=payload.post['title'],
+            content=payload.post['raw']
+        )
     
     # 投稿のモデレーションを非同期で処理
     await moderation_service.handle_moderation(payload.post)
+    
+    # 投稿をVertexAIにインデックス
+    if 'topic_id' in payload.post and 'title' in payload.post and 'raw' in payload.post:
+        await topic_service.vector_search_service.index_topic(
+            topic_id=payload.post['topic_id'],
+            title=payload.post['title'],
+            content=payload.post['raw']
+        )
     
     return {"status": "processing"}

@@ -1,24 +1,34 @@
 import google.generativeai as genai
 from typing import Tuple, Dict, Any
 import traceback
+import re
 
 from src.config import settings
 from src.clients.discourse_client import DiscourseClient
+from src.clients.slack_client import SlackClient
+
+def remove_urls(text: str) -> str:
+    """URLを文字列から削除する"""
+    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    return re.sub(url_pattern, '', text)
 
 class ModerationService:
     def __init__(self, discourse_client: DiscourseClient):
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         self.discourse_client = discourse_client
+        self.slack_client = SlackClient()
 
     async def check_content_appropriateness(self, content: str) -> Tuple[bool, str]:
         """
         コンテンツの適切性をGemini APIを使用してチェック
         Returns: (is_appropriate, explanation)
         """
+        # コンテンツからURLを削除
+        cleaned_content = remove_urls(content)
         prompt = f"""
         Please analyze the following content and determine if it is appropriate for a public forum.
         Consider factors like hate speech, explicit content, harassment, spam, or other inappropriate content.
-        Content to analyze: {content}
+        Content to analyze: {cleaned_content}
         
         Respond with a clear YES if the content is appropriate, or NO if it's inappropriate.
         Also provide a brief explanation of your decision.
@@ -27,7 +37,7 @@ class ModerationService:
         try:
             print("\nAnalyzing content with Gemini API:")
             print(f"Content: {content}")
-            response = await self.model.generate_content(prompt)
+            response = self.model.generate_content(prompt)
             response_text = response.text.strip().lower()
             is_appropriate = response_text.startswith('yes')
             explanation = ' '.join(response_text.split()[1:])  # Remove YES/NO and get explanation
@@ -38,7 +48,7 @@ class ModerationService:
             print(error_msg)
             return True, error_msg  # デフォルトで許可する
 
-    async def check_topic_similarity(self, content: str, existing_topics: list[Dict[str, Any]]) -> tuple[bool, str, int | None]:
+    async def check_topic_similarity(self, title: str, content: str, existing_topics: list[Dict[str, Any]]) -> tuple[bool, str, int | None]:
         """
         Gemini APIを使用して新しいコンテンツと既存トピックの類似性をチェック
         Returns: (is_duplicate, explanation, similar_topic_id)
@@ -46,17 +56,20 @@ class ModerationService:
         if not existing_topics:
             return False, "No existing topics to compare", None
 
+        # 既存トピックからURLを削除
         topics_text = "\n".join([
             f"Topic {t['id']}: {t.get('title', '')} - {t.get('excerpt', '')}"
             for t in existing_topics
         ])
+        # 新しいトピックからURLを削除
+        new_text = f"Topic : {title} - {content}"
 
         prompt = f"""
         Compare the following new content with the existing topics and determine if it is a duplicate or very similar.
         Consider both the meaning and intent of the content, not just exact word matches.
 
         New content:
-        {content}
+        {new_text}
 
         Existing topics:
         {topics_text}
@@ -72,20 +85,17 @@ class ModerationService:
         try:
             print("\nChecking content similarity with Gemini API:")
             print(f"New content: {content}")
-            response = await self.model.generate_content(prompt)
+            response = self.model.generate_content(prompt)
             response_text = response.text.strip()
-            
             # Parse response
             parts = response_text.split('|')
             if len(parts) != 3:
                 return False, "Invalid response format from AI", None
-            
             is_duplicate = parts[0].strip().lower() == 'yes'
             explanation = parts[1].strip()
             topic_id = int(parts[2].strip()) if is_duplicate else None
-            
             return is_duplicate, explanation, topic_id
-            
+
         except Exception as e:
             error_msg = f"Error in similarity check: {str(e)}"
             print(error_msg)
@@ -108,6 +118,14 @@ class ModerationService:
             
             if not is_appropriate:
                 print(f"Inappropriate content detected in post {post_id}: {explanation}")
+# Slackに通知
+                notification_message = f"""
+投稿ID: {post_id}
+コンテンツ: {content}
+理由: {explanation}
+"""
+                await self.slack_client.send_notification(notification_message)
+                """
                 # 投稿を削除
                 await self.discourse_client.delete_post(post_id)
                 # 削除の理由を説明するリプライを投稿
@@ -117,6 +135,7 @@ class ModerationService:
                         topic_id=topic_id,
                         content=settings.DELETION_MESSAGE
                     )
+                """
             
         except Exception as e:
             print(f"Error in moderation handler: {str(e)}")

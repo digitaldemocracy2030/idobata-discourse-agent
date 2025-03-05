@@ -63,3 +63,11 @@ class DiscourseClient:
             response = await client.get(url, headers=self.headers)
             response.raise_for_status()
             return response.json()['topic_list']['topics']
+
+    async def get_topic(self, topic_id: int) -> Dict[str, Any]:
+        """特定のトピックの詳細を取得する"""
+        url = f"{self.base_url}/t/{topic_id}.json"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json()

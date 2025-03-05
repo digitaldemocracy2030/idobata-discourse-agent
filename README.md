@@ -195,6 +195,50 @@ terraform destroy
 
 Note: This will remove all resources created by Terraform, including the deployed service and secrets.
 
+## テスト
+
+### テストの概要
+
+プロジェクトには以下の種類のテストが含まれています：
+
+- 統合テスト (`tests/integration_test.py`)
+- モデレーションサービステスト (`tests/test_moderation_service.py`)
+- トピックサービステスト (`tests/test_topic_service.py`)
+- ベクター検索サービステスト (`tests/test_vector_search_service.py`)
+
+また、`tests/false_positive`ディレクトリには、モデレーションシステムの誤検知テスト用のサンプルデータが含まれています。
+
+### テストの実行方法
+
+1. テスト依存関係のインストール:
+```bash
+pip install -r requirements.txt
+```
+
+2. すべてのテストを実行:
+```bash
+pytest
+```
+
+3. 特定のテストファイルを実行:
+```bash
+pytest tests/test_moderation_service.py
+```
+
+4. テストカバレッジレポートの生成:
+```bash
+pytest --cov=src tests/
+```
+
+カバレッジレポートはHTML形式でも生成できます：
+```bash
+pytest --cov=src --cov-report=html tests/
+```
+
+### テストデータ
+
+`tests/false_positive`ディレクトリには、モデレーションシステムの誤検知を防ぐためのテストケースが含まれています。これらのテストケースは、正常なコンテンツが誤ってフラグされないことを確認するために使用されます。
+
 ## ローカル開発
 
 ### 環境のセットアップ

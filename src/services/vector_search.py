@@ -1,7 +1,9 @@
 from google.cloud import aiplatform
 from google.cloud.aiplatform.matching_engine import MatchingEngineIndex, MatchingEngineIndexEndpoint
+import vertexai
+from vertexai.language_models import TextEmbeddingModel
 from typing import Dict, Any, Tuple
-import google.generativeai as genai
+import json
 
 from src.config import settings
 
@@ -11,7 +13,7 @@ class VectorSearchService:
         self.use_vector_search = self.config["enabled"]
         
         if self.use_vector_search:
-            aiplatform.init(
+            vertexai.init(
                 project=self.config["project_id"],
                 location=self.config["location"]
             )
@@ -22,6 +24,7 @@ class VectorSearchService:
                 self.vector_search_endpoint = MatchingEngineIndexEndpoint(
                     index_endpoint_name=self.config["endpoint_id"]
                 )
+                self.embedding_model = TextEmbeddingModel.from_pretrained("text-multilingual-embedding-002")
                 print(f"Vector Search initialized successfully with index {self.config['index_id']}")
             except Exception as e:
                 print(f"Failed to initialize Vector Search: {str(e)}")
@@ -29,9 +32,8 @@ class VectorSearchService:
 
     async def get_embeddings(self, text: str) -> list[float]:
         """テキストの埋め込みベクトルを取得"""
-        model = genai.GenerativeModel('gemini-pro')
-        response = await model.generate_content(text)
-        return response.embedding
+        embeddings = self.embedding_model.get_embeddings([text])
+        return embeddings[0].values
 
     async def index_topic(self, topic_id: int, title: str, content: str) -> bool:
         """トピックをベクトルインデックスに追加"""
@@ -80,7 +82,9 @@ class VectorSearchService:
             similarity_score = neighbor.distance
             
             if similarity_score >= threshold:
-                return True, f"Similar topic found with score {similarity_score}", int(neighbor.id)
+                # IDから数字部分のみを抽出して変換
+                topic_id = ''.join(filter(str.isdigit, neighbor.id))
+                return True, f"Similar topic found with score {similarity_score}", int(topic_id) if topic_id else None
             
             return False, f"No similar topics found above threshold {threshold}", None
             
