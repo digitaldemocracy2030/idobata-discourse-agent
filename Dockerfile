@@ -19,7 +19,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY src .
+COPY src /app/src
 
 # Expose port 8000
 EXPOSE 8000
