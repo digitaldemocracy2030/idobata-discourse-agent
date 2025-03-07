@@ -3,8 +3,8 @@ import requests
 import json
 import pandas as pd
 
-# AI要約クライアント
-class AISummaryClient:
+# 要約クライアント
+class SummaryClient:
     def __init__(self, base_url="http://localhost:3001/api", admin_api_key=None):
         """
         初期化時にベースURLとAdmin APIキーを設定します。
@@ -138,6 +138,7 @@ class AISummaryClient:
         if custom_prompt:
             params["customPrompt"] = custom_prompt
         response = requests.get(url, headers=self._headers(admin_required=force_regenerate), params=params)
+        print(f"stance_analysis:{response.json()}")
         return response.json()
 
     def get_project_analysis(self, project_id, force_regenerate=False, custom_prompt=None):

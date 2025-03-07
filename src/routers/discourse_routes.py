@@ -10,7 +10,7 @@ from src.services.topic_analysis import TopicAnalysisService
 from src.clients.discourse_client import DiscourseClient
 from src.services.vector_search import VectorSearchService
 from src.clients.slack_client import SlackClient
-from src.clients.ai_summary_client import AISummaryClient
+from src.clients.summary_client import SummaryClient
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ async def get_services():
     moderation_service = ModerationService(discourse_client)
     vector_search_service = VectorSearchService()
     slack_client = SlackClient()
-    ai_summary_client = AISummaryClient(settings.BLUEMO_BASE_URL, settings.BLUEMO_API_KEY)
+    summary_client = SummaryClient(settings.SUMMARY_BASE_URL, settings.SUMMARY_API_KEY)
     
     # 各サービスを初期化
     topic_service = TopicService(
@@ -44,7 +44,7 @@ async def get_services():
     
     topic_analysis_service = TopicAnalysisService(
         discourse_client=discourse_client,
-        ai_summary_client=ai_summary_client,
+        summary_client=summary_client,
         slack_client=slack_client
     )
     
@@ -99,6 +99,10 @@ async def webhook_handler(
     
     # 投稿数をチェックし、必要に応じて分析を実行（titleが存在しない場合のみ）
     if 'topic_id' in payload.post and 'title' not in payload.post:
-        await topic_analysis_service.analyze_topic_if_needed(payload.post['topic_id'])
+        if "aisum" in payload.post['raw']:
+            print("force_analysis")
+            await topic_analysis_service.analyze_topic_if_needed(payload.post['topic_id'], True)
+        else:
+            await topic_analysis_service.analyze_topic_if_needed(payload.post['topic_id'], False)
     
     return {"status": "processing"}

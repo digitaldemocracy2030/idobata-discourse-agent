@@ -77,70 +77,11 @@ class DiscourseClient:
         topic_data = await self.get_topic(topic_id)
         return topic_data.get('posts_count', 0)
 
-    async def analyze_topic(self, topic_id: int, api_key: str) -> Tuple[str, str]:
-        """分析APIを使用してトピックを分析する"""
-        topic_data = await self.get_topic(topic_id)
-        posts = topic_data.get('post_stream', {}).get('posts', [])
-        
-        # 分析APIのベースURL
-        analysis_api_url = "http://localhost:3001/api"
-        
-        # プロジェクトを作成
+    async def get_topic_posts(self, topic_id: int) -> List[Dict[str, Any]]:
+        """トピックの全投稿を取得する"""
+        url = f"{self.base_url}/t/{topic_id}/posts.json"
         async with httpx.AsyncClient() as client:
-            headers = {'x-api-key': api_key}
-            project_data = {
-                'name': f'Topic Analysis - {topic_id}',
-                'description': f'Analysis for topic {topic_id}',
-                'extractionTopic': topic_data.get('title', '')
-            }
-            project_response = await client.post(
-                f"{analysis_api_url}/projects",
-                headers=headers,
-                json=project_data
-            )
-            project_response.raise_for_status()
-            project_id = project_response.json().get('id')
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json().get('post_stream', {}).get('posts', [])
 
-            # コメントを一括インポート
-            comments = []
-            for post in posts:
-                comments.append({
-                    'content': post.get('cooked', ''),
-                    'sourceType': 'discourse',
-                    'sourceUrl': f"{self.base_url}/t/{topic_id}/{post.get('post_number')}"
-                })
-            
-            await client.post(
-                f"{analysis_api_url}/projects/{project_id}/comments/bulk",
-                headers=headers,
-                json={'comments': comments}
-            )
-
-            # 分析レポートを取得
-            analysis_response = await client.get(
-                f"{analysis_api_url}/projects/{project_id}/analysis",
-                headers=headers
-            )
-            analysis_response.raise_for_status()
-            
-            return project_id, analysis_response.json()
-
-    async def post_analysis_result(self, topic_id: int, analysis_result: Dict[str, Any], project_id: str) -> Dict[str, Any]:
-        """分析結果をトピックに投稿する"""
-        content = f"""
-# 投稿分析レポート
-
-このレポートは自動生成された分析結果です。
-
-## 分析結果の詳細
-{analysis_result.get('summary', '分析結果なし')}
-
-## 詳細な分析結果の確認
-完全な分析結果は以下のURLで確認できます：
-http://localhost:3001/projects/{project_id}
-
----
-*この分析は自動で実行されました*
-        """
-        
-        return await self.create_reply(topic_id, content)

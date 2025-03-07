@@ -1,11 +1,13 @@
 import httpx
 import asyncio
 import json
+import pytest
 from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
+@pytest.mark.asyncio
 async def test_webhook():
     """ローカル環境でのwebhookエンドポイントのテスト"""
     headers = {
@@ -47,6 +49,7 @@ async def test_webhook():
         print(f"Error testing webhook: {str(e)}")
         return False
 
+@pytest.mark.asyncio
 async def test_webhook_invalid_payload():
     """無効なペイロードでのwebhookテスト"""
     headers = {
@@ -83,6 +86,7 @@ async def test_webhook_invalid_payload():
         print(f"Error testing invalid payload: {str(e)}")
         return False
 
+@pytest.mark.asyncio
 async def test_webhook_inappropriate_content():
     """不適切な内容を含む投稿のwebhookテスト"""
     headers = {
@@ -123,6 +127,7 @@ async def test_webhook_inappropriate_content():
         print(f"Error testing inappropriate content: {str(e)}")
         return False
 
+@pytest.mark.asyncio
 async def test_webhook_duplicate_content():
     """重複したコンテンツを含む投稿のwebhookテスト"""
     headers = {
@@ -167,6 +172,7 @@ async def test_webhook_duplicate_content():
         print(f"Error testing duplicate content: {str(e)}")
         return False
 
+@pytest.mark.asyncio
 async def test_webhook_education_topic():
     """教育に関するトピックのwebhookテスト（topic_id: 67）"""
     headers = {
@@ -177,9 +183,8 @@ async def test_webhook_education_topic():
     webhook_data = {
         "post": {
             "id": 125,
-            "title": "プログラミング教育における効果的な学習方法",
-            "raw": "プログラミング教育において、以下の学習方法が効果的だと考えられます",
-            "cooked": "<p>プログラミング教育において、以下の学習方法が効果的だと考えられます</p>",
+            "raw": "プログラミング教育において、以下の学習方法が効果的だと考えられますaisum",
+            "cooked": "<p>プログラミング教育において、以下の学習方法が効果的だと考えられますaisum</p>",
             "created_at": datetime.now().isoformat(),
             "user_id": 456,
             "topic_id": 67
@@ -209,13 +214,5 @@ async def test_webhook_education_topic():
         return False
 
 if __name__ == "__main__":
-    print("Testing webhook endpoints...")
-    asyncio.run(test_webhook())
-    print("\nTesting invalid webhook payload...")
-    asyncio.run(test_webhook_invalid_payload())
-    print("\nTesting inappropriate content...")
-    asyncio.run(test_webhook_inappropriate_content())
-    print("\nTesting duplicate content...")
-    asyncio.run(test_webhook_duplicate_content())
     print("\nTesting education topic...")
     asyncio.run(test_webhook_education_topic())

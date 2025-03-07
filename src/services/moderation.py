@@ -1,16 +1,11 @@
 import google.generativeai as genai
 from typing import Tuple, Dict, Any
 import traceback
-import re
 
 from src.config import settings
 from src.clients.discourse_client import DiscourseClient
 from src.clients.slack_client import SlackClient
-
-def remove_urls(text: str) -> str:
-    """URLを文字列から削除する"""
-    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-    return re.sub(url_pattern, '', text)
+from src.utils.utils import remove_urls
 
 class ModerationService:
     def __init__(self, discourse_client: DiscourseClient):

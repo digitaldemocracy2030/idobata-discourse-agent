@@ -10,3 +10,4 @@ pytest
 pytest-asyncio
 requests
 pytest-cov
+beautifulsoup4==4.12.3
