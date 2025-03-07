@@ -62,3 +62,21 @@ variable "vpc_connector_range" {
   type        = string
   default     = "10.8.0.0/28"
 }
+
+variable "vector_search_index_name" {
+  description = "Name of the Vector Search index"
+  type        = string
+  default     = "discourse-topics-index"
+}
+
+variable "vector_search_endpoint_name" {
+  description = "Name of the Vector Search endpoint"
+  type        = string
+  default     = "discourse-topics-endpoint"
+}
+
+variable "embedding_dimension" {
+  description = "Dimension of the text embeddings"
+  type        = number
+  default     = 768  # textembedding-gecko@latest の次元数
+}

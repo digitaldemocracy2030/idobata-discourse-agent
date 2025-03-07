@@ -42,10 +42,6 @@ jobs:
       - name: Build and Push Container
         run: |-
           docker build \
-            --build-arg DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }} \
-            --build-arg DISCOURSE_BASE_URL=${{ secrets.DISCOURSE_BASE_URL }} \
-            --build-arg APP_API_KEY=${{ secrets.APP_API_KEY }} \
-            --build-arg GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:latest
@@ -60,5 +56,14 @@ jobs:
           env_vars: |
             DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }}
             DISCOURSE_BASE_URL=${{ secrets.DISCOURSE_BASE_URL }}
+            DISCOURSE_API_USERNAME=${{ secrets.DISCOURSE_API_USERNAME }}
             APP_API_KEY=${{ secrets.APP_API_KEY }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            VERTEX_PROJECT_ID=${{ secrets.VERTEX_PROJECT_ID }}
+            VERTEX_LOCATION=${{ env.REGION }}
+            VECTOR_SEARCH_INDEX_ID=${{ secrets.VECTOR_SEARCH_INDEX_ID }}
+            VECTOR_SEARCH_ENDPOINT_ID=${{ secrets.VECTOR_SEARCH_ENDPOINT_ID }}
+            SUMMARY_API_KEY=${{ secrets.SUMMARY_API_KEY }}
+            SUMMARY_BASE_URL=${{ secrets.SUMMARY_BASE_URL }}
+            DRY_RUN_MODE=${{ secrets.DRY_RUN_MODE }}

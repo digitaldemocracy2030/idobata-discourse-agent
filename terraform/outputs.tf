@@ -27,3 +27,23 @@ output "artifact_registry_repository" {
   description = "The name of the Artifact Registry repository"
   value       = google_artifact_registry_repository.repo.name
 }
+
+output "vector_search_bucket" {
+  description = "The name of the Vector Search bucket"
+  value       = google_storage_bucket.vector_search_bucket.name
+}
+
+output "vector_search_index_id" {
+  description = "The ID of the Vector Search index"
+  value       = google_vertex_ai_index.vector_search_index.id
+}
+
+output "vector_search_endpoint_id" {
+  description = "The ID of the Vector Search endpoint"
+  value       = google_vertex_ai_index_endpoint.vector_search_endpoint.id
+}
+
+output "deployed_index_id" {
+  description = "The ID of the deployed Vector Search index"
+  value       = google_vertex_ai_index_endpoint_deployed_index.deployed_index.id
+}

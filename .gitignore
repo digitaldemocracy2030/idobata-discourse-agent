@@ -1,6 +1,8 @@
 # Environment variables
 .env
 
+# pycache
+**/__pycache__/**
 # Dependencies
 node_modules/
 
