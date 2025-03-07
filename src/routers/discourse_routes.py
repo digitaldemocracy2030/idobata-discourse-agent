@@ -6,9 +6,11 @@ from src.config import settings
 from src.models.schemas import TopicCreate, WebhookPayload
 from src.services.topic_service import TopicService
 from src.services.moderation import ModerationService
+from src.services.topic_analysis import TopicAnalysisService
 from src.clients.discourse_client import DiscourseClient
 from src.services.vector_search import VectorSearchService
 from src.clients.slack_client import SlackClient
+from src.clients.ai_summary_client import AISummaryClient
 
 router = APIRouter()
 
@@ -30,36 +32,51 @@ async def get_services():
     moderation_service = ModerationService(discourse_client)
     vector_search_service = VectorSearchService()
     slack_client = SlackClient()
-    topic_service = TopicService(discourse_client, moderation_service, vector_search_service, slack_client)
-    return topic_service, moderation_service
+    ai_summary_client = AISummaryClient(settings.BLUEMO_BASE_URL, settings.BLUEMO_API_KEY)
+    
+    # 各サービスを初期化
+    topic_service = TopicService(
+        discourse_client=discourse_client,
+        moderation_service=moderation_service,
+        vector_search_service=vector_search_service,
+        slack_client=slack_client
+    )
+    
+    topic_analysis_service = TopicAnalysisService(
+        discourse_client=discourse_client,
+        ai_summary_client=ai_summary_client,
+        slack_client=slack_client
+    )
+    
+    return topic_service, moderation_service, topic_analysis_service
 
 @router.get("/categories", response_model=List[Dict[str, Any]])
 async def list_categories(
     api_key: str = Depends(verify_api_key),
-    services: tuple[TopicService, ModerationService] = Depends(get_services)
+    services: tuple[TopicService, ModerationService, TopicAnalysisService] = Depends(get_services)
 ):
     """利用可能なカテゴリーの一覧を取得するエンドポイント"""
-    topic_service, _ = services
+    topic_service, _, _ = services
     return await topic_service.list_categories()
 
 @router.post("/topics")
 async def create_topic(
     topic: TopicCreate,
     api_key: str = Depends(verify_api_key),
-    services: tuple[TopicService, ModerationService] = Depends(get_services)
+    services: tuple[TopicService, ModerationService, TopicAnalysisService] = Depends(get_services)
 ):
     """新しいトピックを作成するエンドポイント"""
-    topic_service, _ = services
+    topic_service, _, _ = services
     return await topic_service.create_topic(topic)
 
 @router.post("/webhook")
 async def webhook_handler(
     request: Request,
     payload: WebhookPayload,
-    services: tuple[TopicService, ModerationService] = Depends(get_services)
+    services: tuple[TopicService, ModerationService, TopicAnalysisService] = Depends(get_services)
 ):
     """Discourseからのwebhookを処理するエンドポイント"""
-    topic_service, moderation_service = services
+    topic_service, moderation_service, topic_analysis_service = services
     
     # Webhookのシグネチャを検証（必要に応じて実装）
     # 投稿の重複チェック
@@ -79,5 +96,9 @@ async def webhook_handler(
             title=payload.post['title'],
             content=payload.post['raw']
         )
+    
+    # 投稿数をチェックし、必要に応じて分析を実行（titleが存在しない場合のみ）
+    if 'topic_id' in payload.post and 'title' not in payload.post:
+        await topic_analysis_service.analyze_topic_if_needed(payload.post['topic_id'])
     
     return {"status": "processing"}

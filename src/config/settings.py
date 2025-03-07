@@ -27,11 +27,22 @@ VECTOR_SEARCH_ENDPOINT_ID = os.getenv("VECTOR_SEARCH_ENDPOINT_ID")
 EMBEDDING_ENDPOINT_ID = os.getenv("EMBEDDING_ENDPOINT_ID")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "textembedding-gecko@latest")
 
+# Bluemo configuration
+BLUEMO_API_KEY = os.getenv("BLUEMO_API_KEY")
+BLUEMO_BASE_URL = os.getenv("BLUEMO_BASE_URL", "http://localhost:3001/api")
+POSTS_THRESHOLD = 4  # 分析を実行する投稿数の閾値
+
 # Constants
 DELETION_MESSAGE = "このコメントはガイドラインを違反しているため削除されました"
 
 # Validation
-if not all([DISCOURSE_API_KEY, DISCOURSE_BASE_URL, APP_API_KEY, GEMINI_API_KEY]):
+if not all([
+    DISCOURSE_API_KEY,
+    DISCOURSE_BASE_URL,
+    APP_API_KEY,
+    GEMINI_API_KEY,
+    BLUEMO_API_KEY
+]):
     raise ValueError("Missing required environment variables")
 
 # Vector Search configuration

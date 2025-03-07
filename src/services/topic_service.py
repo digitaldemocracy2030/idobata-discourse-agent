@@ -1,12 +1,13 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from fastapi import HTTPException
+from bs4 import BeautifulSoup
 
 from src.clients.discourse_client import DiscourseClient
 from src.clients.slack_client import SlackClient
 from src.services.moderation import ModerationService
 from src.services.vector_search import VectorSearchService
+from src.services.topic_analysis import TopicAnalysisService
 from src.models.schemas import TopicCreate, TopicSimilarityResponse
-from bs4 import BeautifulSoup
 
 def extract_text(html):
     soup = BeautifulSoup(html, "html.parser")
