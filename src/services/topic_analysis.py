@@ -26,8 +26,8 @@ class TopicAnalysisService:
             # プロジェクト一覧を取得して既存プロジェクトを確認
             projects = self.summary_client.list_projects()
             for project in projects:
-                print(f"project:{project}")
                 if project.get("name") == f"topic_{topic_id}":
+                    print(f"project found!:{project}")
                     return project.get("_id")
 
             # 新規プロジェクトを作成
@@ -78,13 +78,15 @@ class TopicAnalysisService:
             self.summary_client.generate_questions(project_id)
 
             # プロジェクト全体の分析を実行
+
             overallAnalysis = self.summary_client.get_project_analysis(
                 project_id,
                 force_regenerate=True
-            ).get("overallAnalysis", "分析結果を取得できませんでした")
+            )
             print(f"分析結果:{overallAnalysis}")
 
-            return project_id, overallAnalysis
+            return project_id, overallAnalysis.get("overallAnalysis", "分析結果を取得できませんでした")
+
 
         except Exception as e:
             raise Exception(f"Failed to analyze topic: {str(e)}")
@@ -110,7 +112,7 @@ class TopicAnalysisService:
                     print(f"{content}")
                     # dry runモードの場合、Discourseへの投稿はスキップしてSlackのみに通知
                     await self.slack_client.send_notification(
-                        f"[レビュー待ち] トピック {topic_id} の分析が完了しました。\n"
+                        f"[dry run] トピック {topic_id} の分析が完了しました。\n"
                         f"プロジェクトID: {project_id}\n"
                         f"全体の分析: {analysis_result}\n"
                         f"投稿内容: {content}\n"
@@ -126,7 +128,8 @@ class TopicAnalysisService:
                     await self.slack_client.send_notification(
                         f"トピック {topic_id} の分析が完了しました。\n"
                         f"プロジェクトID: {project_id}\n"
-                        f"内容: {analysis_result}\n"
+                        f"全体の分析: {analysis_result}\n"
+                        f"投稿内容: {content}\n"
                         f"投稿数: {current_count}"
                     )
         except Exception as e:
@@ -302,6 +305,7 @@ class TopicAnalysisService:
     def generate_post_message(self, project_id):
         project = self.summary_client.get_project(project_id)
         questions = project["questions"]
+        print(f"questions:{questions}")
         q_df = pd.DataFrame.from_dict(questions)
 
         print("Fetching project info...")
