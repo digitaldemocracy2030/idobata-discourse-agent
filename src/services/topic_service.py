@@ -38,23 +38,40 @@ class TopicService:
 
     async def check_topic_duplication(self, title: str, content: str) -> TopicSimilarityResponse:
         """トピックの重複をチェックする"""
+        # 最近のトピックを取得
         recent_topics = await self.discourse_client.get_recent_topics()
         
         # ベクトル検索による類似性チェック
-        is_duplicate_vector, explanation_vector, similar_topic_id_vector = (
+        is_similar_vector, explanation_vector, similar_topic_id_vector = (
             await self.vector_search_service.check_topic_similarity(title, content)
         )
+
+        # 候補トピックのリストを作成
+        candidate_topics = []
         
-        # Geminiによる類似性チェック
-        is_duplicate_text, explanation_text, similar_topic_id_text = (
-            await self.moderation_service.check_topic_similarity(title, content, recent_topics)
+        # ベクトル検索で類似トピックが見つかった場合、それを候補に追加
+        if is_similar_vector and similar_topic_id_vector:
+            try:
+                vector_topic = await self.discourse_client.get_topic(similar_topic_id_vector)
+                if vector_topic:
+                    candidate_topics.append(vector_topic)
+            except Exception as e:
+                print(f"Failed to fetch vector search topic: {str(e)}")
+
+        # 最近のトピックから類似候補を追加
+        candidate_topics.extend(recent_topics)
+
+        # 重複を除去（同じIDのトピックが複数回含まれないように）
+        unique_candidates = {topic['id']: topic for topic in candidate_topics}.values()
+        
+        # 言語モデルによる詳細な類似性チェック
+        is_duplicate, explanation, similar_topic_id = (
+            await self.moderation_service.deep_similarity_check(title, content, list(unique_candidates))
         )
-        # どちらかの方法で重複が検出された場合
-        if is_duplicate_vector or is_duplicate_text:
-            similar_topic_id = similar_topic_id_vector or similar_topic_id_text
-            explanation = explanation_vector if is_duplicate_vector else explanation_text
+
+        if is_duplicate and similar_topic_id:
             
-            # 既存トピックの内容を取得
+            # 既存トピックの詳細を取得して通知
             try:
                 existing_topic = await self.discourse_client.get_topic(similar_topic_id)
                 existing_title = existing_topic.get('title', 'タイトル不明')
@@ -62,31 +79,37 @@ class TopicService:
                 
                 # 重複検出時のSlackメッセージを送信
                 message = (
-                    f"⚠類似したトピックが検出されました"
+                    f"⚠類似したトピックが検出されました\n"
                     f"*新規トピック*\n"
                     f"タイトル: {title}\n"
                     f"内容:\n```\n{content}\n```\n\n"
                     f"*既存トピック*\n"
                     f"タイトル: {existing_title}\n"
                     f"内容:\n```\n{existing_content}\n```\n\n"
-                    f"*類似度*: {explanation}\n"
+                    f"*分析結果*: {explanation}\n"
                     f"*類似トピックID*: {similar_topic_id}"
                 )
-                print(f"Duplicated topic found")
+                print(f"Duplicated topic found - ID: {similar_topic_id}")
                 await self.slack_client.send_notification(message)
+                
+                return TopicSimilarityResponse(
+                    is_duplicate=True,
+                    explanation=explanation,
+                    similar_topic_id=similar_topic_id
+                )
             except Exception as e:
                 print(f"Failed to fetch existing topic details: {str(e)}")
-            
-            return TopicSimilarityResponse(
-                is_duplicate=True,
-                explanation=explanation,
-                similar_topic_id=similar_topic_id
-            )
+                # エラーが発生しても重複判定は維持
+                return TopicSimilarityResponse(
+                    is_duplicate=True,
+                    explanation=explanation,
+                    similar_topic_id=similar_topic_id
+                )
         
-        print(f"Not duplicated")
+        print(f"No similar topics found")
         return TopicSimilarityResponse(
             is_duplicate=False,
-            explanation="",
+            explanation="No similar topics found",
             similar_topic_id=None
         )
 
