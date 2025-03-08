@@ -195,6 +195,7 @@ async def test_webhook_education_topic():
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "http://localhost:8000/api/webhook",
+                #"https://discourse-bot-756967799775.asia-northeast1.run.app/api/webhook",
                 headers=headers,
                 json=webhook_data
             )
