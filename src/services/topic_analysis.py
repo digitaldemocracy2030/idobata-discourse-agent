@@ -328,6 +328,7 @@ class TopicAnalysisService:
         print("Generating post message...")
         posting_message_prompt = self.build_posting_message_prompt(project, target_question, iframe_tag)
         result = self.model.generate_content(posting_message_prompt, generation_config={"response_mime_type": "application/json"})
+        print(f"gemini_final_response:{result}")
         post_text = json.loads(result.text)["post_text"]
 
         print(f"Message generated\n. {post_text}")
