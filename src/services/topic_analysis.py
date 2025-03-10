@@ -18,7 +18,7 @@ class TopicAnalysisService:
         self.discourse_client = discourse_client
         self.summary_client = summary_client
         self.slack_client = slack_client
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
     async def _create_or_get_project(self, topic_id: int, title: str) -> str:
         """トピックに対応するSummaryプロジェクトを作成または取得"""
