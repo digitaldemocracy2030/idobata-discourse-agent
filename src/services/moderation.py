@@ -5,7 +5,7 @@ import traceback
 from src.config import settings
 from src.clients.discourse_client import DiscourseClient
 from src.clients.slack_client import SlackClient
-from src.utils.utils import remove_urls
+from src.utils.utils import remove_urls, remove_html_tags
 
 class ModerationService:
     def __init__(self, discourse_client: DiscourseClient):
@@ -18,8 +18,8 @@ class ModerationService:
         コンテンツの適切性をGemini APIを使用してチェック
         Returns: (is_appropriate, explanation)
         """
-        # コンテンツからURLを削除
-        cleaned_content = remove_urls(content)
+        # コンテンツからURLとHTMLタグを削除
+        cleaned_content = remove_html_tags(remove_urls(content))
         prompt = f"""
         Please analyze the following content and determine if it is appropriate for a public forum.
         Consider factors like hate speech, explicit content, harassment, spam, or other inappropriate content.
