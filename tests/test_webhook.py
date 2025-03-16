@@ -187,9 +187,10 @@ async def test_webhook_education_topic():
             "cooked": "<p>プログラミング教育において、以下の学習方法が効果的だと考えられますaisum</p>",
             "created_at": datetime.now().isoformat(),
             "user_id": 456,
-            "topic_id": 67
+            "topic_id": 146
         }
     }
+
 
     try:
         async with httpx.AsyncClient() as client:
