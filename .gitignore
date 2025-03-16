@@ -19,7 +19,6 @@ build/
 # OS generated files
 .DS_Store
 .DS_Store?
-.terraform/
 ._*
 .Spotlight-V100
 .Trashes
@@ -29,4 +28,7 @@ Thumbs.db
 # Other
 terraform.tfvars
 terraform.tfstate
+.terraform.lock.hcl
+.terraform/
 .secrets
+.coverage
