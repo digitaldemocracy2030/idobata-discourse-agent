@@ -13,6 +13,9 @@ build/
 # Logs
 *.log
 
+# un
+*.un~
+
 # OS generated files
 .DS_Store
 .DS_Store?
