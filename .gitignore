@@ -13,6 +13,9 @@ build/
 # Logs
 *.log
 
+# un
+*.un~
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -25,4 +28,7 @@ Thumbs.db
 # Other
 terraform.tfvars
 terraform.tfstate
+.terraform.lock.hcl
+.terraform/
 .secrets
+.coverage
