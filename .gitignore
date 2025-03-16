@@ -24,3 +24,5 @@ Thumbs.db
 
 # Other
 terraform.tfvars
+terraform.tfstate
+.secrets
