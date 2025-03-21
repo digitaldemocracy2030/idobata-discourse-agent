@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API configuration
-API_KEY_NAME = "X-API-Key"
+API_KEY_NAME = "X-Discourse-Event-Signature"
 
 # Debug configuration
 DRY_RUN_MODE = os.getenv("DRY_RUN_MODE", "false").lower() == "true"

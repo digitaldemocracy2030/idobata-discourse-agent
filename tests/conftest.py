@@ -1,13 +1,19 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, AsyncMock
 import google.generativeai as genai
+from dotenv import load_dotenv
 
 from src.main import app
 from src.clients.discourse_client import DiscourseClient
 from src.services.moderation import ModerationService
 from src.services.vector_search import VectorSearchService
 from src.services.topic_service import TopicService
+
+# .envファイルを読み込む
+load_dotenv()
+
 
 @pytest.fixture
 def test_client():

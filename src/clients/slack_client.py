@@ -4,6 +4,7 @@ from src.config import settings
 class SlackClient:
     def __init__(self):
         self.webhook_url = settings.SLACK_WEBHOOK_URL
+        self.max_message_length = 3000
 
     def _determine_header(self, message: str) -> str:
         """
@@ -40,6 +41,28 @@ class SlackClient:
         # その他の不適切なコンテンツ
         return "🚫 *不適切なコンテンツが検出されました*"
 
+    def _split_message(self, message: str) -> list[str]:
+        """
+        長いメッセージを適切な長さに分割する
+        """
+        if len(message) <= self.max_message_length:
+            return [message]
+        
+        messages = []
+        current_message = ""
+        
+        for line in message.split('\n'):
+            if len(current_message) + len(line) + 1 > self.max_message_length:
+                messages.append(current_message)
+                current_message = line
+            else:
+                current_message += '\n' + line if current_message else line
+        
+        if current_message:
+            messages.append(current_message)
+        
+        return messages
+
     async def send_notification(self, message: str) -> None:
         """
         Slackにメッセージを送信する
@@ -47,35 +70,36 @@ class SlackClient:
         if not self.webhook_url:
             print("Slack webhook URL is not configured")
             return
-
+        messages = self._split_message(message)
         async with aiohttp.ClientSession() as session:
-            try:
-                # メッセージの内容を解析してヘッダーを決定
-                header = self._determine_header(message)
-                
-                payload = {
-                    "text": message,
-                    "blocks": [
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": header
+            for i, message in enumerate(messages):
+                try:
+                    # メッセージの内容を解析してヘッダーを決定
+                    header = self._determine_header(message)
+                    
+                    payload = {
+                        "text": message,
+                        "blocks": [
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": header
+                                }
+                            },
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": message
+                                }
                             }
-                        },
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": message
-                            }
-                        }
-                    ]
-                }
-                
-                async with session.post(self.webhook_url, json=payload) as response:
-                    if response.status != 200:
-                        print(f"Failed to send Slack notification: {response.status}")
-                        
-            except Exception as e:
-                print(f"Error sending Slack notification: {str(e)}")
+                        ]
+                    }
+                    
+                    async with session.post(self.webhook_url, json=payload) as response:
+                        if response.status != 200:
+                            print(f"Failed to send Slack notification: {response.status}")
+                            
+                except Exception as e:
+                    print(f"Error sending Slack notification: {str(e)}")
