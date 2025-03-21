@@ -1,0 +1,69 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGION: asia-northeast1
+  SERVICE_NAME: discourse-bot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2.1.0
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          token_format: 'access_token'
+          create_credentials_file: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker push
+        run: |-
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+          gcloud auth configure-docker
+
+      - name: Build and Push Container
+        run: |-
+          docker build \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2.1.0
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          env_vars: |
+            DISCOURSE_API_KEY=${{ secrets.DISCOURSE_API_KEY }}
+            DISCOURSE_BASE_URL=${{ secrets.DISCOURSE_BASE_URL }}
+            DISCOURSE_API_USERNAME=${{ secrets.DISCOURSE_API_USERNAME }}
+            APP_API_KEY=${{ secrets.APP_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            VERTEX_PROJECT_ID=${{ secrets.VERTEX_PROJECT_ID }}
+            VERTEX_LOCATION=${{ env.REGION }}
+            VECTOR_SEARCH_INDEX_ID=${{ secrets.VECTOR_SEARCH_INDEX_ID }}
+            VECTOR_SEARCH_ENDPOINT_ID=${{ secrets.VECTOR_SEARCH_ENDPOINT_ID }}
+            SUMMARY_API_KEY=${{ secrets.SUMMARY_API_KEY }}
+            SUMMARY_BASE_URL=${{ secrets.SUMMARY_BASE_URL }}
+            DRY_RUN_MODE=${{ secrets.DRY_RUN_MODE }}

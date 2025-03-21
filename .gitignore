@@ -1,0 +1,34 @@
+# Environment variables
+.env
+
+# pycache
+**/__pycache__/**
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+
+# un
+*.un~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Other
+terraform.tfvars
+terraform.tfstate
+.terraform.lock.hcl
+.terraform/
+.secrets
+.coverage
