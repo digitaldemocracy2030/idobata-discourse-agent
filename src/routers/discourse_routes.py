@@ -23,8 +23,11 @@ async def verify_api_key(request: Request, api_key: str):
     """APIキーを検証する"""
     raw_body = await request.body()
     secret = settings.APP_API_KEY
+    if not api_key.startswith("sha256="):
+        raise HTTPException(status_code=403, detail="Invalid signature format")
+    received_hash = api_key[len("sha256="):]
     computed_hash = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    if hmac.compare_digest(computed_hash, api_key):
+    if hmac.compare_digest(computed_hash, received_hash):
         print("署名検証成功：正規のDiscourse Webhookです")
     else:
         print("署名検証失敗：シークレットが違うか偽のリクエストです")

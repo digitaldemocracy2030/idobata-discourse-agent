@@ -17,7 +17,7 @@ def make_signature(payload, secret):
         json.dumps(payload).encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
-    return computed_signature
+    return f"sha256={computed_signature}"
 
 @pytest.mark.asyncio
 async def test_webhook():
