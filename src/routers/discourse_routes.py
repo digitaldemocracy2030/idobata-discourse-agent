@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, BackgroundTasks
 from fastapi.security.api_key import APIKeyHeader
 from typing import List, Dict, Any
+import hashlib
+import hmac
 
 from src.config import settings
 from src.models.schemas import TopicCreate, WebhookPayload
@@ -17,14 +19,19 @@ router = APIRouter()
 # Configure API key authentication
 api_key_header = APIKeyHeader(name=settings.API_KEY_NAME, auto_error=True)
 
-async def verify_api_key(api_key: str = Depends(api_key_header)):
+async def verify_api_key(request: Request, api_key: str):
     """APIキーを検証する"""
-    if api_key != settings.APP_API_KEY:
+    raw_body = await request.body()
+    secret = settings.APP_API_KEY
+    computed_hash = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    if hmac.compare_digest(computed_hash, api_key):
+        print("署名検証成功：正規のDiscourse Webhookです")
+    else:
+        print("署名検証失敗：シークレットが違うか偽のリクエストです")
         raise HTTPException(
             status_code=403,
             detail="Invalid API Key"
         )
-    return api_key
 
 async def get_services():
     """サービスのインスタンスを取得する"""
@@ -33,7 +40,6 @@ async def get_services():
     vector_search_service = VectorSearchService()
     slack_client = SlackClient()
     summary_client = SummaryClient(settings.SUMMARY_BASE_URL, settings.SUMMARY_API_KEY)
-    
     # 各サービスを初期化
     topic_service = TopicService(
         discourse_client=discourse_client,
@@ -41,13 +47,11 @@ async def get_services():
         vector_search_service=vector_search_service,
         slack_client=slack_client
     )
-    
     topic_analysis_service = TopicAnalysisService(
         discourse_client=discourse_client,
         summary_client=summary_client,
         slack_client=slack_client
     )
-    
     return topic_service, moderation_service, topic_analysis_service
 
 @router.post("/webhook")
@@ -55,9 +59,10 @@ async def webhook_handler(
     request: Request,
     payload: WebhookPayload,
     background_tasks: BackgroundTasks,
-    api_key: str = Depends(verify_api_key),
+    api_key: str = Depends(api_key_header),
     services: tuple[TopicService, ModerationService, TopicAnalysisService] = Depends(get_services)
 ):
+    await verify_api_key(request=request, api_key=api_key)
     """Discourseからのwebhookを処理するエンドポイント"""
     topic_service, moderation_service, topic_analysis_service = services
     
