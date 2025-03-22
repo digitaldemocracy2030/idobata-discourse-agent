@@ -1,5 +1,7 @@
 import httpx
 import asyncio
+import hmac
+import hashlib
 import json
 import pytest
 import os
@@ -7,13 +9,22 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
+secret = os.getenv('APP_API_KEY', 'test_api_key')
+
+def make_signature(payload, secret):
+    computed_signature = hmac.new(
+        secret.encode("utf-8"),
+        json.dumps(payload).encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+    return computed_signature
 
 @pytest.mark.asyncio
 async def test_webhook():
     """ローカル環境でのwebhookエンドポイントのテスト"""
     headers = {
         'Content-Type': 'application/json',
-        'X-Discourse-Event-Signature': os.getenv('APP_API_KEY', 'test_api_key')
+        'X-Discourse-Event-Signature': make_signature(webhook_data, secret)
     }
 
     # テスト用のwebhookペイロード
@@ -53,15 +64,13 @@ async def test_webhook():
 
 @pytest.mark.asyncio
 async def test_webhook_invalid_payload():
-    """無効なペイロードでのwebhookテスト"""
-    headers = {
-        'Content-Type': 'application/json',
-        'X-Discourse-Event-Signature': os.getenv('APP_API_KEY', 'test_api_key')
-    }
-
     # 無効なペイロード（postフィールドが欠落）
     invalid_data = {
         "invalid_field": "test"
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Discourse-Event-Signature': make_signature(invalid_data, secret)
     }
 
     try:
@@ -92,12 +101,6 @@ async def test_webhook_invalid_payload():
 @pytest.mark.asyncio
 async def test_webhook_inappropriate_content():
     """不適切な内容を含む投稿のwebhookテスト"""
-    headers = {
-        'Content-Type': 'application/json',
-        'X-Discourse-Event-Signature': os.getenv('APP_API_KEY', 'test_api_key')
-    }
-
-    # 不適切な内容を含むテスト用のwebhookペイロード
     webhook_data = {
         "post": {
             "id": 123,
@@ -107,6 +110,11 @@ async def test_webhook_inappropriate_content():
             "user_id": 456,
             "topic_id": 67
         }
+    }
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Discourse-Event-Signature': make_signature(webhook_data, secret)
     }
 
     try:
@@ -134,12 +142,6 @@ async def test_webhook_inappropriate_content():
 @pytest.mark.asyncio
 async def test_webhook_duplicate_content():
     """重複したコンテンツを含む投稿のwebhookテスト"""
-    headers = {
-        'Content-Type': 'application/json',
-        'X-Discourse-Event-Signature': os.getenv('APP_API_KEY', 'test_api_key')
-    }
-
-    # 重複したコンテンツを含むテスト用のwebhookペイロード
     webhook_data = {
         "post": {
             "id": 124,
@@ -150,6 +152,11 @@ async def test_webhook_duplicate_content():
             "user_id": 456,
             "topic_id": 67
         }
+    }
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Discourse-Event-Signature': make_signature(webhook_data, secret)
     }
 
     try:
@@ -180,12 +187,6 @@ async def test_webhook_duplicate_content():
 @pytest.mark.asyncio
 async def test_webhook_education_topic():
     """教育に関するトピックのwebhookテスト（topic_id: 146）"""
-    headers = {
-        'Content-Type': 'application/json',
-        'X-Discourse-Event-Signature': os.getenv('APP_API_KEY', 'test_api_key')
-    }
-
-    # 教育に関するテスト用のwebhookペイロード
     webhook_data = {
         "post": {
             "id": 125,
@@ -196,7 +197,10 @@ async def test_webhook_education_topic():
             "topic_id": 146
         }
     }
-
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Discourse-Event-Signature': make_signature(webhook_data, secret)
+    }
 
     try:
         timeout_settings = httpx.Timeout(30.0, connect=10.0)  # タイムアウト設定
@@ -224,6 +228,52 @@ async def test_webhook_education_topic():
         import traceback
         print(f"スタックトレース:\n{traceback.format_exc()}")
         return False
+
+@pytest.mark.asyncio
+async def test_webhook_valid_api_key():
+    """有効なAPI Keyでのwebhookテスト"""
+
+    webhook_data = {
+        "post": {
+            "id": 123,
+            "title": "Test Post Title",
+            "raw": "This is a test post for webhook",
+            "cooked": "<p>This is a test post for webhook</p>",
+            "created_at": datetime.now().isoformat(),
+            "user_id": 456,
+            "topic_id": 67
+        }
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Discourse-Event-Signature': make_signature(webhook_data, secret)
+    }
+
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:8000/api/webhook",
+                headers=headers,
+                json=webhook_data
+            )
+            
+            print("\nValid API Key test results:")
+            print(f"Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            
+            assert response.status_code == 200, "Authorized"
+            print("Valid API Key test completed successfully")
+            return True
+
+    except Exception as e:
+        print(f"\n=== 予期せぬエラー ===")
+        print(f"エラータイプ: {type(e).__name__}")
+        print(f"エラーメッセージ: {str(e)}")
+        import traceback
+        print(f"スタックトレース:\n{traceback.format_exc()}")
+        return False
+
 
 @pytest.mark.asyncio
 async def test_webhook_invalid_api_key():
@@ -272,5 +322,4 @@ async def test_webhook_invalid_api_key():
 
 if __name__ == "__main__":
     print("\nTesting education topic...")
-    #asyncio.run(test_webhook_invalid_api_key())
     asyncio.run(test_webhook_education_topic())
