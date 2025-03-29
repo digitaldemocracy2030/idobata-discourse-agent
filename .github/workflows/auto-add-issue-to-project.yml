@@ -13,7 +13,7 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_PROJECT }}
           script: |
-            const projectId = 'PVT_kwDODCKp5M4A0jZ0';
+            const projectId = 'PVT_kwDOCkTOps4Awm2E';
             const issueId = context.payload.issue.node_id;
 
             await github.graphql(`
